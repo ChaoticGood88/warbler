@@ -1,10 +1,10 @@
 import os
 
-from flask import Flask, render_template, request, flash, redirect, session, g
+from flask import Flask, render_template, request, flash, redirect, session, g, abort
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+from forms import UserAddForm, LoginForm, MessageForm, UserEditForm
 from models import db, connect_db, User, Message                                           
 
 CURR_USER_KEY = "curr_user"
@@ -214,7 +214,30 @@ def stop_following(follow_id):
 def profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    form = UserEditForm(obj=g.user)
+
+    if form.validate_on_submit():
+        # Authenticate the user's password
+        if not User.authenticate(g.user.username, form.password.data):
+            flash("Invalid password.", "danger")
+            return redirect("/")
+
+        # Update user's information
+        g.user.username = form.username.data
+        g.user.email = form.email.data
+        g.user.image_url = form.image_url.data
+        g.user.header_image_url = form.header_image_url.data
+        g.user.bio = form.bio.data
+
+        db.session.commit()
+        flash("Profile updated!", "success")
+        return redirect(f"/users/{g.user.id}")
+
+    return render_template("users/edit.html", form=form, user=g.user)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -290,13 +313,20 @@ def messages_destroy(message_id):
 def homepage():
     """Show homepage:
 
-    - anon users: no messages
-    - logged in: 100 most recent messages of followed_users
+    - Anon users: no messages
+    - Logged-in users: 100 most recent messages from followed users and self
     """
 
     if g.user:
+        # Get IDs of users the current user is following
+        following_ids = [user.id for user in g.user.following]
+        # Include the logged-in user's own ID
+        following_ids.append(g.user.id)
+
+        # Query messages from these users
         messages = (Message
                     .query
+                    .filter(Message.user_id.in_(following_ids))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
@@ -305,6 +335,7 @@ def homepage():
 
     else:
         return render_template('home-anon.html')
+
 
 
 ##############################################################################
