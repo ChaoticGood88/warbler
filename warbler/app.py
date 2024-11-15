@@ -112,8 +112,14 @@ def login():
 @app.route('/logout')
 def logout():
     """Handle logout of user."""
-
-    # IMPLEMENT THIS
+    
+    if CURR_USER_KEY in session:
+        del session[CURR_USER_KEY]
+        flash("Successfully logged out.", "success")
+    else:
+        flash("You were not logged in.", "info")
+    
+    return redirect('/login')
 
 
 ##############################################################################
@@ -142,8 +148,9 @@ def users_show(user_id):
 
     user = User.query.get_or_404(user_id)
 
-    # snagging messages in order from the database;
-    # user.messages won't be in order by default
+    # Set a breakpoint here
+    import pdb; pdb.set_trace()
+
     messages = (Message
                 .query
                 .filter(Message.user_id == user_id)
